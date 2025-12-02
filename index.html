@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Binary Diff Tool</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h2 { margin-bottom: 5px; }
+    input { margin-bottom: 10px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; font-family: monospace; }
+    th { background: #eee; }
+    .diffbit { color: red; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h2>Binary Diff Tool</h2>
+<p>Select two files to compare byte-by-byte.</p>
+
+<input type="file" id="fileA"><br>
+<input type="file" id="fileB"><br>
+<button onclick="runDiff()">Diff Files</button>
+
+<div id="output"></div>
+
+<script>
+function toBinary(byte) {
+    return byte.toString(2).padStart(8, '0');
+}
+
+function toHex(byte) {
+    return byte.toString(16).padStart(2, '0').toUpperCase();
+}
+
+function highlightBits(aByte, bByte) {
+    const aBin = toBinary(aByte);
+    const bBin = toBinary(bByte);
+    let aOut = "", bOut = "";
+
+    for (let i = 0; i < 8; i++) {
+        if (aBin[i] !== bBin[i]) {
+            aOut += `<span class="diffbit">${aBin[i]}</span>`;
+            bOut += `<span class="diffbit">${bBin[i]}</span>`;
+        } else {
+            aOut += aBin[i];
+            bOut += bBin[i];
+        }
+    }
+    return { aOut, bOut };
+}
+
+function runDiff() {
+    const fileA = document.getElementById("fileA").files[0];
+    const fileB = document.getElementById("fileB").files[0];
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    if (!fileA || !fileB) {
+        output.innerHTML = "<p style='color:red'>Please select both files.</p>";
+        return;
+    }
+
+    Promise.all([fileA.arrayBuffer(), fileB.arrayBuffer()]).then(buffers => {
+        const a = new Uint8Array(buffers[0]);
+        const b = new Uint8Array(buffers[1]);
+        const len = Math.min(a.length, b.length);
+
+        let diffs = [];
+        for (let i = 0; i < len && diffs.length < 1000; i++) {
+            if (a[i] !== b[i]) {
+                const bits = highlightBits(a[i], b[i]);
+                diffs.push({
+                    addr: i,
+                    a_hex: toHex(a[i]),
+                    b_hex: toHex(b[i]),
+                    a_bin: bits.aOut,
+                    b_bin: bits.bOut
+                });
+            }
+        }
+
+        let html = `<h3>Found ${diffs.length} differences</h3>`;
+        if (diffs.length === 0) {
+            output.innerHTML = html;
+            return;
+        }
+
+        html += `
+            <table>
+                <tr>
+                    <th>Address (Hex)</th>
+                    <th>File A (Hex)</th>
+                    <th>File B (Hex)</th>
+                    <th>File A (Binary)</th>
+                    <th>File B (Binary)</th>
+                </tr>
+        `;
+
+        diffs.forEach(d => {
+            html += `
+                <tr>
+                    <td>${d.addr.toString(16).toUpperCase().padStart(8, "0")}</td>
+                    <td>${d.a_hex}</td>
+                    <td>${d.b_hex}</td>
+                    <td>${d.a_bin}</td>
+                    <td>${d.b_bin}</td>
+                </tr>
+            `;
+        });
+
+        html += `</table>`;
+        output.innerHTML = html;
+    });
+}
+</script>
+
+</body>
+</html>
